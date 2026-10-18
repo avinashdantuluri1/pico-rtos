@@ -29,7 +29,7 @@ Hold BOOTSEL while plugging in the board, then copy `build/rtos_app.uf2` to the 
 |---|---|---|
 | 0 | Build setup, SysTick blink via raw registers | Builds; not yet run on hardware |
 | 1 | Flash and blink on hardware | |
-| 2 | Two tasks + PendSV context switch | |
+| 2 | Two tasks + PendSV context switch | Builds; not yet run on hardware |
 | 3 | Priorities, sleep, idle task | |
 | 4 | Semaphores, queues, mutex + priority inheritance | |
 | 5 | UART driver + shell | |

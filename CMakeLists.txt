@@ -12,6 +12,9 @@ pico_sdk_init()
 # The kernel and drivers talk to hardware registers directly.
 add_executable(rtos_app
     app/main.c
+    kernel/kernel.c
+    kernel/context_switch.S
+    drivers/gpio.c
 )
 target_include_directories(rtos_app PRIVATE kernel drivers)
 target_link_libraries(rtos_app pico_runtime pico_standard_link)
