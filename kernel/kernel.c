@@ -20,13 +20,13 @@
 #define TICK_HZ          1000u
 #define TIME_SLICE_TICKS 10u
 
-#define MAX_TASKS        4          // includes the idle task
+#define MAX_TASKS        8          // includes the idle task
 #define IDLE_STACK_WORDS 64
 #define XPSR_THUMB       0x01000000u  // T bit must be 1 on Cortex-M
 
 extern void kernel_start_first(uint32_t *sp) __attribute__((noreturn));
 
-tcb_t *current_task;               // read by PendSV assembly
+tcb_t *current_task;               // read by PendSV assembly (declared in kernel.h)
 static tcb_t tcbs[MAX_TASKS];
 static uint32_t idle_stack[IDLE_STACK_WORDS] __attribute__((aligned(8)));
 static int num_tasks;
@@ -41,13 +41,13 @@ void kernel_init(void) {
     current_task = 0;
 }
 
-static uint32_t irq_save(void) {
+uint32_t kernel_irq_save(void) {
     uint32_t primask;
     __asm volatile("mrs %0, primask\n cpsid i" : "=r"(primask) :: "memory");
     return primask;
 }
 
-static void irq_restore(uint32_t primask) {
+void kernel_irq_restore(uint32_t primask) {
     __asm volatile("msr primask, %0" :: "r"(primask) : "memory");
 }
 
@@ -79,6 +79,11 @@ static int add_task(task_fn fn, uint32_t *stack_base, uint32_t stack_words, uint
     tcb_t *t = &tcbs[num_tasks];
     t->sp = sp;
     t->priority = priority;
+    t->base_priority = priority;
+    t->has_timeout = 0;
+    t->timed_out = 0;
+    t->wait_obj = 0;
+    t->wait_mutex = 0;
     t->state = TASK_READY;
     t->wake_tick = 0;
     return num_tasks++;
@@ -112,15 +117,60 @@ void kernel_start(void) {
 
 uint32_t kernel_ticks(void) { return ticks; }
 
+void kernel_yield(void) {
+    SCB_ICSR = SCB_ICSR_PENDSVSET;             // give up the CPU now
+    __asm volatile("dsb\n isb" ::: "memory");  // PendSV runs before we continue
+}
+
 void task_sleep(uint32_t ms) {
     if (ms > 0) {
-        uint32_t primask = irq_save();
+        uint32_t primask = kernel_irq_save();
         current_task->wake_tick = ticks + ms;
         current_task->state = TASK_SLEEPING;
-        irq_restore(primask);
+        kernel_irq_restore(primask);
     }
-    SCB_ICSR = SCB_ICSR_PENDSVSET;          // give up the CPU now
-    __asm volatile("dsb\n isb" ::: "memory"); // PendSV runs before we continue
+    kernel_yield();
+}
+
+// Mark the running task as waiting on obj. The caller must have interrupts off
+// and call kernel_yield() after turning them back on.
+void kernel_block_current(void *obj, uint32_t timeout_ms) {
+    current_task->state = TASK_BLOCKED;
+    current_task->wait_obj = obj;
+    current_task->timed_out = 0;
+    if (timeout_ms == WAIT_FOREVER) {
+        current_task->has_timeout = 0;
+    } else {
+        current_task->has_timeout = 1;
+        current_task->wake_tick = ticks + timeout_ms;
+    }
+}
+
+// Wake the highest-priority task waiting on obj. Interrupts must be off.
+// Requests a switch if the woken task outranks the running one.
+int kernel_wake_one(void *obj) {
+    tcb_t *best = 0;
+    for (int i = 0; i < num_tasks; i++) {
+        tcb_t *t = &tcbs[i];
+        if (t->state == TASK_BLOCKED && t->wait_obj == obj &&
+            (best == 0 || t->priority > best->priority)) {
+            best = t;
+        }
+    }
+    if (best == 0) return 0;
+    best->state = TASK_READY;
+    best->wait_obj = 0;
+    best->wait_mutex = 0;
+    best->has_timeout = 0;
+    if (best->priority > current_task->priority) {
+        SCB_ICSR = SCB_ICSR_PENDSVSET;
+    }
+    return 1;
+}
+
+tcb_t *kernel_tasks(int *count) {
+    *count = num_tasks;
+    return tcbs;
 }
 
 // Called from PendSV (assembly): run the highest-priority ready task.
@@ -144,7 +194,14 @@ void isr_systick(void) {
     // Wake sleepers whose time is up (signed difference is safe across tick wraparound).
     for (int i = 0; i < num_tasks; i++) {
         tcb_t *t = &tcbs[i];
-        if (t->state == TASK_SLEEPING && (int32_t)(ticks - t->wake_tick) >= 0) {
+        int timer_wait = (t->state == TASK_SLEEPING) ||
+                         (t->state == TASK_BLOCKED && t->has_timeout);
+        if (timer_wait && (int32_t)(ticks - t->wake_tick) >= 0) {
+            if (t->state == TASK_BLOCKED) {      // timeout, nobody woke it
+                t->timed_out = 1;
+                t->wait_obj = 0;
+                t->has_timeout = 0;
+            }
             t->state = TASK_READY;
             if (t->priority >= current_task->priority) switch_needed = 1;
         }

@@ -22,6 +22,7 @@ add_executable(rtos_app
     app/main.c
     kernel/kernel.c
     kernel/context_switch.S
+    kernel/sync.c
     drivers/gpio.c
 )
 target_include_directories(rtos_app PRIVATE boot kernel drivers)

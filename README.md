@@ -32,7 +32,7 @@ Hold BOOTSEL while plugging in the board, then copy `build/rtos_app.uf2` to the 
 | 2 | Two tasks + PendSV context switch | Builds; not yet run on hardware |
 | B | Own boot code, no SDK (12 MHz crystal clock; PLL to 150 MHz still to do) | Builds; not yet run on hardware |
 | 3 | Priorities, sleep, idle task | Builds; not yet run on hardware |
-| 4 | Semaphores, queues, mutex + priority inheritance | |
+| 4 | Semaphores, queues, mutex + priority inheritance | Builds; not yet run on hardware |
 | 5 | UART driver + shell | |
 | 6 | I2C / SPI BMP280 drivers | |
 | 7 | Stack overflow detection | |
