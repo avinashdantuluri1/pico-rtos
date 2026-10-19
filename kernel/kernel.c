@@ -1,5 +1,6 @@
-// Milestone 2: round-robin kernel. SysTick fires every 1 ms and pends PendSV
-// every TIME_SLICE_TICKS; PendSV (context_switch.S) swaps tasks.
+// Milestone 3: priority scheduler with sleep and an idle task. SysTick fires every
+// 1 ms, wakes sleeping tasks, and pends PendSV when a switch may be needed;
+// PendSV (context_switch.S) swaps tasks using kernel_pick_next().
 #include "kernel.h"
 
 #define REG(addr) (*(volatile uint32_t *)(addr))
@@ -19,13 +20,15 @@
 #define TICK_HZ          1000u
 #define TIME_SLICE_TICKS 10u
 
-#define MAX_TASKS        4
+#define MAX_TASKS        4          // includes the idle task
+#define IDLE_STACK_WORDS 64
 #define XPSR_THUMB       0x01000000u  // T bit must be 1 on Cortex-M
 
 extern void kernel_start_first(uint32_t *sp) __attribute__((noreturn));
 
 tcb_t *current_task;               // read by PendSV assembly
 static tcb_t tcbs[MAX_TASKS];
+static uint32_t idle_stack[IDLE_STACK_WORDS] __attribute__((aligned(8)));
 static int num_tasks;
 static volatile uint32_t ticks;
 
@@ -38,7 +41,23 @@ void kernel_init(void) {
     current_task = 0;
 }
 
-int task_create(task_fn fn, uint32_t *stack_base, uint32_t stack_words) {
+static uint32_t irq_save(void) {
+    uint32_t primask;
+    __asm volatile("mrs %0, primask\n cpsid i" : "=r"(primask) :: "memory");
+    return primask;
+}
+
+static void irq_restore(uint32_t primask) {
+    __asm volatile("msr primask, %0" :: "r"(primask) : "memory");
+}
+
+static void idle_task(void) {
+    for (;;) {
+        __asm volatile("wfi");   // nothing to run: sleep until the next interrupt
+    }
+}
+
+static int add_task(task_fn fn, uint32_t *stack_base, uint32_t stack_words, uint8_t priority) {
     if (num_tasks >= MAX_TASKS) return -1;
 
     // Full descending stack: top is the highest address, 8-byte aligned.
@@ -59,34 +78,78 @@ int task_create(task_fn fn, uint32_t *stack_base, uint32_t stack_words) {
 
     tcb_t *t = &tcbs[num_tasks];
     t->sp = sp;
-    // circular list: new task points at the first, previous last points at new
-    t->next = &tcbs[0];
-    if (num_tasks > 0) tcbs[num_tasks - 1].next = t;
+    t->priority = priority;
+    t->state = TASK_READY;
+    t->wake_tick = 0;
     return num_tasks++;
 }
 
+int task_create(task_fn fn, uint32_t *stack_base, uint32_t stack_words, uint8_t priority) {
+    if (priority == 0) return -1;
+    return add_task(fn, stack_base, stack_words, priority);
+}
+
 void kernel_start(void) {
+    add_task(idle_task, idle_stack, IDLE_STACK_WORDS, 0);
+
+    // Start the highest-priority task (first one created wins ties).
+    tcb_t *first = &tcbs[0];
+    for (int i = 1; i < num_tasks; i++) {
+        if (tcbs[i].priority > first->priority) first = &tcbs[i];
+    }
+    current_task = first;
+
     // PendSV lowest priority so it never preempts another interrupt
     SCB_SHPR3 |= 0x00FF0000u;
 
+    // Start the tick last: its handler needs current_task to be valid.
     SYST_RVR = SYS_CLK_HZ / TICK_HZ - 1;
     SYST_CVR = 0;
     SYST_CSR = SYST_CSR_CLKSOURCE | SYST_CSR_TICKINT | SYST_CSR_ENABLE;
 
-    current_task = &tcbs[0];
     kernel_start_first(current_task->sp);
 }
 
 uint32_t kernel_ticks(void) { return ticks; }
 
-// Called from PendSV (assembly): choose the next task, round robin.
+void task_sleep(uint32_t ms) {
+    if (ms > 0) {
+        uint32_t primask = irq_save();
+        current_task->wake_tick = ticks + ms;
+        current_task->state = TASK_SLEEPING;
+        irq_restore(primask);
+    }
+    SCB_ICSR = SCB_ICSR_PENDSVSET;          // give up the CPU now
+    __asm volatile("dsb\n isb" ::: "memory"); // PendSV runs before we continue
+}
+
+// Called from PendSV (assembly): run the highest-priority ready task.
+// Scan starts after the current task, so equal priorities take turns.
 void kernel_pick_next(void) {
-    current_task = current_task->next;
+    int cur = (int)(current_task - tcbs);
+    tcb_t *best = 0;
+    for (int i = 1; i <= num_tasks; i++) {
+        tcb_t *t = &tcbs[(cur + i) % num_tasks];
+        if (t->state == TASK_READY && (best == 0 || t->priority > best->priority)) {
+            best = t;
+        }
+    }
+    current_task = best;    // never null: the idle task is always ready
 }
 
 void isr_systick(void) {
     ticks++;
-    if (ticks % TIME_SLICE_TICKS == 0) {
-        SCB_ICSR = SCB_ICSR_PENDSVSET;   // request a context switch
+    int switch_needed = (ticks % TIME_SLICE_TICKS == 0);
+
+    // Wake sleepers whose time is up (signed difference is safe across tick wraparound).
+    for (int i = 0; i < num_tasks; i++) {
+        tcb_t *t = &tcbs[i];
+        if (t->state == TASK_SLEEPING && (int32_t)(ticks - t->wake_tick) >= 0) {
+            t->state = TASK_READY;
+            if (t->priority >= current_task->priority) switch_needed = 1;
+        }
+    }
+    if (switch_needed) {
+        SCB_ICSR = SCB_ICSR_PENDSVSET;
     }
 }
