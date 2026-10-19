@@ -35,7 +35,7 @@ Hold BOOTSEL while plugging in the board, then copy `build/rtos_app.uf2` to the 
 | 4 | Semaphores, queues, mutex + priority inheritance | Builds; not yet run on hardware |
 | 5 | UART driver + shell | |
 | 6 | I2C / SPI BMP280 drivers | |
-| 7 | Stack overflow detection | |
+| 7 | Stack overflow detection | Builds; not yet run on hardware |
 | 8 | Logic-analyzer measurements | |
 
 ## Results

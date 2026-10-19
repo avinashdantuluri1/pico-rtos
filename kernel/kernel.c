@@ -14,6 +14,11 @@
 
 #define SCB_ICSR         REG(0xE000ED04u)
 #define SCB_ICSR_PENDSVSET (1u << 28)
+#define SCB_SHCSR        REG(0xE000ED24u)
+#define SCB_SHCSR_USGFAULTENA (1u << 18)
+#define SCB_CFSR         REG(0xE000ED28u)
+#define CFSR_STKOF       (1u << 20)
+#define STACK_FILL       0xA5A5A5A5u
 #define SCB_SHPR3        REG(0xE000ED20u)  // priorities: PendSV bits 23:16, SysTick 31:24
 
 #include "board.h"
@@ -60,9 +65,13 @@ static void idle_task(void) {
 static int add_task(task_fn fn, uint32_t *stack_base, uint32_t stack_words, uint8_t priority) {
     if (num_tasks >= MAX_TASKS) return -1;
 
+    // Fill with a known pattern so task_stack_unused_bytes() can find the high-water mark.
+    for (uint32_t i = 0; i < stack_words; i++) stack_base[i] = STACK_FILL;
+
     // Full descending stack: top is the highest address, 8-byte aligned.
     uint32_t *sp = stack_base + stack_words;
     sp = (uint32_t *)((uint32_t)sp & ~7u);
+    uint32_t *top = sp;
 
     // Frame the CPU pops on exception return (low -> high address: r0..xPSR)
     *--sp = XPSR_THUMB;            // xPSR
@@ -78,6 +87,8 @@ static int add_task(task_fn fn, uint32_t *stack_base, uint32_t stack_words, uint
 
     tcb_t *t = &tcbs[num_tasks];
     t->sp = sp;
+    t->stack_limit = (uint32_t *)(((uint32_t)stack_base + 7u) & ~7u);
+    t->stack_top = top;
     t->priority = priority;
     t->base_priority = priority;
     t->has_timeout = 0;
@@ -103,6 +114,8 @@ void kernel_start(void) {
         if (tcbs[i].priority > first->priority) first = &tcbs[i];
     }
     current_task = first;
+
+    SCB_SHCSR |= SCB_SHCSR_USGFAULTENA;   // report stack overflow as UsageFault, not HardFault
 
     // PendSV lowest priority so it never preempts another interrupt
     SCB_SHPR3 |= 0x00FF0000u;
@@ -209,4 +222,40 @@ void isr_systick(void) {
     if (switch_needed) {
         SCB_ICSR = SCB_ICSR_PENDSVSET;
     }
+}
+
+uint32_t task_stack_unused_bytes(int task_index) {
+    if (task_index < 0 || task_index >= num_tasks) return 0;
+    tcb_t *t = &tcbs[task_index];
+    uint32_t *p = t->stack_limit;
+    while (p < t->stack_top && *p == STACK_FILL) p++;
+    return (uint32_t)((uint8_t *)p - (uint8_t *)t->stack_limit);
+}
+
+// ---------- fault handling ----------
+
+volatile fault_info_t kernel_fault_info;
+
+__attribute__((weak)) void kernel_on_fault(void) {
+    for (;;) {}
+}
+
+static void fault_stop(uint32_t cfsr) {
+    uint32_t psp;
+    __asm volatile("cpsid i\n mrs %0, psp" : "=r"(psp) :: "memory");
+    kernel_fault_info.cfsr = cfsr;
+    kernel_fault_info.psp = psp;
+    kernel_fault_info.task_index = current_task ? (int32_t)(current_task - tcbs) : -1;
+    kernel_on_fault();
+    for (;;) {}
+}
+
+// Called from PendSV when saving a task's registers would run past its stack.
+void kernel_stack_overflow(void) {
+    fault_stop(CFSR_STKOF);
+}
+
+// The CPU raises this when PSP drops below PSPLIM (or exception stacking would).
+void isr_usagefault(void) {
+    fault_stop(SCB_CFSR);
 }
