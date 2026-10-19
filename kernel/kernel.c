@@ -15,7 +15,7 @@
 #define SCB_ICSR_PENDSVSET (1u << 28)
 #define SCB_SHPR3        REG(0xE000ED20u)  // priorities: PendSV bits 23:16, SysTick 31:24
 
-#define SYS_CLK_HZ       150000000u  // SDK boot code sets clk_sys to 150 MHz
+#include "board.h"
 #define TICK_HZ          1000u
 #define TIME_SLICE_TICKS 10u
 
