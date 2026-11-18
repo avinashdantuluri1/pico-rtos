@@ -22,6 +22,8 @@ cmake -G Ninja -B build .
 ninja -C build
 ```
 
+For a first hardware test with no kernel, build the LED test instead: `cmake -G Ninja -B build -DAPP=bringup .`
+
 Hold BOOTSEL while plugging in the board, then copy `build/rtos_app.uf2` to the `RP2350` drive.
 
 ## Roadmap

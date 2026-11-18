@@ -17,13 +17,18 @@ add_compile_options(${CPU_FLAGS} -Os -g -Wall -Wextra -ffreestanding
 add_link_options(${CPU_FLAGS} -nostdlib -Wl,--gc-sections
     -T ${CMAKE_SOURCE_DIR}/boot/link.ld -Wl,-Map=rtos_app.map)
 
+# APP=rtos (default) builds the kernel demo; APP=bringup builds the no-kernel LED test.
+set(APP "rtos" CACHE STRING "which app to build: rtos or bringup")
+if(APP STREQUAL "bringup")
+    set(APP_SOURCES app/bringup_blink.c)
+else()
+    set(APP_SOURCES app/main.c kernel/kernel.c kernel/context_switch.S kernel/sync.c)
+endif()
+
 add_executable(rtos_app
     boot/startup.c
-    app/main.c
-    kernel/kernel.c
-    kernel/context_switch.S
-    kernel/sync.c
     drivers/gpio.c
+    ${APP_SOURCES}
 )
 target_include_directories(rtos_app PRIVATE boot kernel drivers)
 set_target_properties(rtos_app PROPERTIES SUFFIX .elf)
