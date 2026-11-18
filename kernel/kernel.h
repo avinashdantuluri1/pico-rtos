@@ -22,13 +22,14 @@ typedef struct tcb {
     uint8_t state;
     uint8_t has_timeout;    // blocked with a timeout
     uint8_t timed_out;      // set when a blocked task was woken by its timeout
+    const char *name;       // shown by the shell
     void *wait_obj;         // what a blocked task is waiting on
     struct mutex *wait_mutex; // set only when waiting on a mutex (for inheritance)
 } tcb_t;
 
 void kernel_init(void);
 // priority must be 1 or higher (0 is reserved for the idle task)
-int  task_create(task_fn fn, uint32_t *stack_base, uint32_t stack_words, uint8_t priority);
+int  task_create(task_fn fn, uint32_t *stack_base, uint32_t stack_words, uint8_t priority, const char *name);
 void kernel_start(void) __attribute__((noreturn));
 void task_sleep(uint32_t ms);
 

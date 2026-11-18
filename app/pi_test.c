@@ -82,8 +82,8 @@ int main(void) {
 
     kernel_init();
     mutex_init(&lock);
-    task_create(low_task,    stack_low,    STACK_WORDS, 1);
-    task_create(medium_task, stack_medium, STACK_WORDS, 2);
-    task_create(high_task,   stack_high,   STACK_WORDS, 3);
+    task_create(low_task,    stack_low,    STACK_WORDS, 1, "low");
+    task_create(medium_task, stack_medium, STACK_WORDS, 2, "medium");
+    task_create(high_task,   stack_high,   STACK_WORDS, 3, "high");
     kernel_start();
 }

@@ -1,8 +1,11 @@
-// Milestone 4 + 7 demo: a producer sends numbers through a queue to a consumer.
-// Each side toggles its own LED, and both touch a shared counter under a mutex.
+// Demo: a producer sends numbers through a queue to a consumer. Each side toggles
+// its own LED, and both touch a shared counter under a mutex. A third task runs a
+// serial shell on UART0 (GP0 = TX, GP1 = RX, 115200 baud).
 #include "gpio.h"
 #include "kernel.h"
 #include "sync.h"
+#include "uart.h"
+#include "shell.h"
 
 #define LED_PRODUCER 14u
 #define LED_CONSUMER 15u
@@ -14,6 +17,7 @@
 
 static uint32_t stack_producer[STACK_WORDS] __attribute__((aligned(8)));
 static uint32_t stack_consumer[STACK_WORDS] __attribute__((aligned(8)));
+static uint32_t stack_shell[512] __attribute__((aligned(8)));
 
 static queue_t queue;
 static uint32_t queue_storage[4];
@@ -76,15 +80,17 @@ static void bad_task(void) {
 int main(void) {
     gpio_init_output(LED_PRODUCER);
     gpio_init_output(LED_CONSUMER);
+    uart_init(115200);
 
     kernel_init();
     queue_init(&queue, queue_storage, sizeof(uint32_t), 4);
     mutex_init(&counter_lock);
 
-    task_create(producer, stack_producer, STACK_WORDS, 2);
-    task_create(consumer, stack_consumer, STACK_WORDS, 1);
+    task_create(producer, stack_producer, STACK_WORDS, 2, "producer");
+    task_create(consumer, stack_consumer, STACK_WORDS, 1, "consumer");
+    task_create(shell_task, stack_shell, 512, 1, "shell");
 #if STACK_OVERFLOW_TEST
-    task_create(bad_task, stack_bad, 128, 1);
+    task_create(bad_task, stack_bad, 128, 1, "bad");
 #endif
     kernel_start();
 }

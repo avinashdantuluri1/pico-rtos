@@ -62,7 +62,7 @@ static void idle_task(void) {
     }
 }
 
-static int add_task(task_fn fn, uint32_t *stack_base, uint32_t stack_words, uint8_t priority) {
+static int add_task(task_fn fn, uint32_t *stack_base, uint32_t stack_words, uint8_t priority, const char *name) {
     if (num_tasks >= MAX_TASKS) return -1;
 
     // Fill with a known pattern so task_stack_unused_bytes() can find the high-water mark.
@@ -95,18 +95,19 @@ static int add_task(task_fn fn, uint32_t *stack_base, uint32_t stack_words, uint
     t->timed_out = 0;
     t->wait_obj = 0;
     t->wait_mutex = 0;
+    t->name = name;
     t->state = TASK_READY;
     t->wake_tick = 0;
     return num_tasks++;
 }
 
-int task_create(task_fn fn, uint32_t *stack_base, uint32_t stack_words, uint8_t priority) {
+int task_create(task_fn fn, uint32_t *stack_base, uint32_t stack_words, uint8_t priority, const char *name) {
     if (priority == 0) return -1;
-    return add_task(fn, stack_base, stack_words, priority);
+    return add_task(fn, stack_base, stack_words, priority, name);
 }
 
 void kernel_start(void) {
-    add_task(idle_task, idle_stack, IDLE_STACK_WORDS, 0);
+    add_task(idle_task, idle_stack, IDLE_STACK_WORDS, 0, "idle");
 
     // Start the highest-priority task (first one created wins ties).
     tcb_t *first = &tcbs[0];

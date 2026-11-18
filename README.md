@@ -26,6 +26,8 @@ For a first hardware test with no kernel, build the LED test instead: `cmake -G 
 
 Priority inheritance test: `cmake -G Ninja -B build -DAPP=pitest .` (add `-DNO_INHERIT=ON` to build the mutex without inheritance; that build is expected to FAIL the test). Result shows on the LEDs, see the comment at the top of `app/pi_test.c`.
 
+Serial shell: the default `rtos` build runs a shell on UART0 (GP0 = TX, GP1 = RX, 115200 baud). Commands: `help`, `uptime`, `tasks`.
+
 Hold BOOTSEL while plugging in the board, then copy `build/rtos_app.uf2` to the `RP2350` drive.
 
 ## Roadmap
@@ -37,7 +39,7 @@ Hold BOOTSEL while plugging in the board, then copy `build/rtos_app.uf2` to the 
 | B | Own boot code, no SDK (12 MHz crystal clock; PLL to 150 MHz still to do) | Runs on hardware |
 | 3 | Priorities, sleep, idle task | Sleep and tasks run on hardware; priority behavior not yet tested |
 | 4 | Semaphores, queues, mutex + priority inheritance | Queue and mutex run on hardware. Priority inheritance test (low/medium/high tasks) passes with inheritance and fails with it switched off; semaphore timeouts and chained inheritance not yet tested |
-| 5 | UART driver + shell | |
+| 5 | UART driver + shell | Builds; not yet run on hardware |
 | 6 | I2C / SPI BMP280 drivers | |
 | 7 | Stack overflow detection | A deliberate overflow stops the system (seen via LEDs); fault status not yet read back |
 | 8 | Logic-analyzer measurements | |

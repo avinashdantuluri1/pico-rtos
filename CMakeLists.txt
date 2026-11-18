@@ -25,7 +25,7 @@ if(APP STREQUAL "bringup")
 elseif(APP STREQUAL "pitest")
     set(APP_SOURCES app/pi_test.c kernel/kernel.c kernel/context_switch.S kernel/sync.c)
 else()
-    set(APP_SOURCES app/main.c kernel/kernel.c kernel/context_switch.S kernel/sync.c)
+    set(APP_SOURCES app/main.c app/shell.c drivers/uart.c kernel/kernel.c kernel/context_switch.S kernel/sync.c)
 endif()
 
 add_executable(rtos_app
