@@ -24,6 +24,8 @@ ninja -C build
 
 For a first hardware test with no kernel, build the LED test instead: `cmake -G Ninja -B build -DAPP=bringup .`
 
+Priority inheritance test: `cmake -G Ninja -B build -DAPP=pitest .` (add `-DNO_INHERIT=ON` to build the mutex without inheritance; that build is expected to FAIL the test). Result shows on the LEDs, see the comment at the top of `app/pi_test.c`.
+
 Hold BOOTSEL while plugging in the board, then copy `build/rtos_app.uf2` to the `RP2350` drive.
 
 ## Roadmap

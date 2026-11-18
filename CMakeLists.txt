@@ -18,9 +18,12 @@ add_link_options(${CPU_FLAGS} -nostdlib -Wl,--gc-sections
     -T ${CMAKE_SOURCE_DIR}/boot/link.ld -Wl,-Map=rtos_app.map)
 
 # APP=rtos (default) builds the kernel demo; APP=bringup builds the no-kernel LED test.
-set(APP "rtos" CACHE STRING "which app to build: rtos or bringup")
+set(APP "rtos" CACHE STRING "which app to build: rtos, bringup or pitest")
+option(NO_INHERIT "build the mutex without priority inheritance (for the pitest FAIL case)" OFF)
 if(APP STREQUAL "bringup")
     set(APP_SOURCES app/bringup_blink.c)
+elseif(APP STREQUAL "pitest")
+    set(APP_SOURCES app/pi_test.c kernel/kernel.c kernel/context_switch.S kernel/sync.c)
 else()
     set(APP_SOURCES app/main.c kernel/kernel.c kernel/context_switch.S kernel/sync.c)
 endif()
@@ -32,6 +35,9 @@ add_executable(rtos_app
 )
 target_include_directories(rtos_app PRIVATE boot kernel drivers)
 set_target_properties(rtos_app PROPERTIES SUFFIX .elf)
+if(NO_INHERIT)
+    target_compile_definitions(rtos_app PRIVATE MUTEX_NO_INHERITANCE)
+endif()
 
 # Pico 2 W expects a UF2 with the RP2350 ARM-Secure family ID.
 add_custom_command(TARGET rtos_app POST_BUILD

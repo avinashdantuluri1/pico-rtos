@@ -98,6 +98,7 @@ int mutex_lock(mutex_t *m) {
         // Owned by someone else. Lift the owner (and whoever it is waiting on,
         // transitively) to at least our priority so a medium-priority task
         // can't keep it from running.
+#ifndef MUTEX_NO_INHERITANCE    // test builds can turn inheritance off to prove the test can fail
         uint8_t prio = current_task->priority;
         tcb_t *o = m->owner;
         for (int hop = 0; o != 0 && hop < 8; hop++) {
@@ -108,6 +109,7 @@ int mutex_lock(mutex_t *m) {
                 break;
             }
         }
+#endif
 
         kernel_block_current(m, WAIT_FOREVER);
         current_task->wait_mutex = m;
