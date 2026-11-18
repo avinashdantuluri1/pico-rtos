@@ -29,15 +29,15 @@ Hold BOOTSEL while plugging in the board, then copy `build/rtos_app.uf2` to the 
 ## Roadmap
 | # | Milestone | Status |
 |---|---|---|
-| 0 | Build setup, SysTick blink via raw registers | Builds; not yet run on hardware |
-| 1 | Flash and blink on hardware | |
-| 2 | Two tasks + PendSV context switch | Builds; not yet run on hardware |
-| B | Own boot code, no SDK (12 MHz crystal clock; PLL to 150 MHz still to do) | Builds; not yet run on hardware |
-| 3 | Priorities, sleep, idle task | Builds; not yet run on hardware |
-| 4 | Semaphores, queues, mutex + priority inheritance | Builds; not yet run on hardware |
+| 0 | Build setup, SysTick blink via raw registers | Done (superseded by the kernel tick) |
+| 1 | Flash and blink on hardware | Done: LED test boots and blinks on a Pico 2 W |
+| 2 | Two tasks + PendSV context switch | Runs on hardware (checked with LEDs, not yet measured) |
+| B | Own boot code, no SDK (12 MHz crystal clock; PLL to 150 MHz still to do) | Runs on hardware |
+| 3 | Priorities, sleep, idle task | Sleep and tasks run on hardware; priority behavior not yet tested |
+| 4 | Semaphores, queues, mutex + priority inheritance | Queue and mutex run on hardware; priority inheritance not yet tested |
 | 5 | UART driver + shell | |
 | 6 | I2C / SPI BMP280 drivers | |
-| 7 | Stack overflow detection | Builds; not yet run on hardware |
+| 7 | Stack overflow detection | A deliberate overflow stops the system (seen via LEDs); fault status not yet read back |
 | 8 | Logic-analyzer measurements | |
 
 ## Results
